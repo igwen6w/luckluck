@@ -1,0 +1,262 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://code.jquery.com https://unpkg.com https://d3js.org https://threejs.org https://cdn.plot.ly https://stackpath.bootstrapcdn.com https://maps.googleapis.com https://cdn.tailwindcss.com https://ajax.googleapis.com https://kit.fontawesome.com https://cdn.datatables.net https://maxcdn.bootstrapcdn.com https://code.highcharts.com https://tako-static-assets-production.s3.amazonaws.com https://www.youtube.com https://fonts.googleapis.com https://fonts.gstatic.com https://pfst.cf2.poecdn.net https://i.imgur.com https://wikimedia.org https://*.icons8.com https://*.giphy.com https://picsum.photos https://images.unsplash.com; frame-src 'self' https://www.youtube.com https://trytako.com; child-src 'self'; manifest-src 'self'; worker-src 'self'; upgrade-insecure-requests; block-all-mixed-content;">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://code.jquery.com https://unpkg.com https://d3js.org https://threejs.org https://cdn.plot.ly https://stackpath.bootstrapcdn.com https://maps.googleapis.com https://cdn.tailwindcss.com https://ajax.googleapis.com https://kit.fontawesome.com https://cdn.datatables.net https://maxcdn.bootstrapcdn.com https://code.highcharts.com https://tako-static-assets-production.s3.amazonaws.com https://www.youtube.com https://fonts.googleapis.com https://fonts.gstatic.com https://pfst.cf2.poecdn.net https://i.imgur.com https://wikimedia.org https://*.icons8.com https://*.giphy.com https://picsum.photos https://images.unsplash.com; frame-src 'self' https://www.youtube.com https://trytako.com; child-src 'self'; manifest-src 'self'; worker-src 'self'; upgrade-insecure-requests; block-all-mixed-content;">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>抽奖页面</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            text-align: center;
+        }
+        .candidates {
+            display: grid;
+            grid-template-columns: repeat(10, 1fr);
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .candidate {
+            aspect-ratio: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: white;
+            background-color: #4CAF50;
+            border-radius: 5px;
+            transition: all 0.3s ease;
+        }
+        .candidate.highlight {
+            transform: scale(1.1);
+            box-shadow: 0 0 15px rgba(255, 215, 0, 1);
+            background-color: #FFA500;
+            color: #000;
+        }
+        .candidate.winner {
+            background-color: #FF4500;
+            color: white;
+        }
+        button {
+            background-color: #4CAF50;
+            border: none;
+            color: white;
+            padding: 15px 32px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 4px 2px;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.4);
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: 15% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 600px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .winner-photos {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 20px;
+        }
+        .winner-photo {
+            width: 150px;
+            height: 150px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: white;
+            background-color: #FF4500;
+            border-radius: 5px;
+        }
+        .confetti {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background-color: #f0f;
+            opacity: 0.7;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>抽奖页面</h1>
+        <div class="candidates" id="candidates"></div>
+        <button onclick="draw()">开始抽奖</button>
+    </div>
+
+    <div id="winnerModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">×</span>
+            <h2>恭喜获奖者！</h2>
+            <div class="winner-photos" id="winnerPhotos"></div>
+        </div>
+    </div>
+
+    <script>
+        const candidates = [];
+        const predefinedWinners = [27, 42];
+        let drawn = false;
+        let firstDraw = true;
+
+        function createCandidates() {
+            const candidatesContainer = document.getElementById('candidates');
+            for (let i = 1; i <= 50; i++) {
+                const candidate = document.createElement('div');
+                candidate.className = 'candidate';
+                candidate.textContent = i;
+                candidate.id = `candidate-${i}`;
+                candidatesContainer.appendChild(candidate);
+                candidates.push(candidate);
+            }
+        }
+
+        function highlightCandidate(index) {
+            candidates.forEach(c => c.classList.remove('highlight'));
+            candidates[index].classList.add('highlight');
+        }
+
+        function draw() {
+            if (drawn) {
+                showWinners(false);
+                return;
+            }
+
+            drawPhase(0);
+        }
+
+        function drawPhase(phase) {
+            let counter = 0;
+            const duration = 3000; // 3 seconds
+            const interval = 80; // 0.08 second
+            const totalSteps = duration / interval;
+
+            const animation = setInterval(() => {
+                const randomIndex = Math.floor(Math.random() * 50);
+                highlightCandidate(randomIndex);
+                counter++;
+
+                if (counter >= totalSteps) {
+                    clearInterval(animation);
+                    const winnerIndex = predefinedWinners[phase] - 1;
+                    highlightCandidate(winnerIndex);
+                    candidates[winnerIndex].classList.add('winner');
+                    
+                    if (phase === 0) {
+                        setTimeout(() => drawPhase(1), 1000); // Start next phase after 1 second
+                    } else {
+                        setTimeout(showWinners, 500, true); // Show winners after 500ms
+                    }
+                }
+            }, interval);
+
+            drawn = true;
+        }
+
+        function showWinners(showConfetti) {
+            const winnerPhotos = document.getElementById('winnerPhotos');
+            winnerPhotos.innerHTML = '';
+
+            predefinedWinners.forEach(winner => {
+                const winnerPhoto = document.createElement('div');
+                winnerPhoto.className = 'winner-photo';
+                winnerPhoto.textContent = winner;
+                winnerPhotos.appendChild(winnerPhoto);
+            });
+
+            const modal = document.getElementById('winnerModal');
+            modal.style.display = "block";
+            if (showConfetti && firstDraw) {
+                createConfetti();
+                firstDraw = false;
+            }
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('winnerModal');
+            modal.style.display = "none";
+        }
+
+        function createConfetti() {
+            const confettiCount = 100;
+            const container = document.querySelector('.modal-content');
+
+            for (let i = 0; i < confettiCount; i++) {
+                const confetti = document.createElement('div');
+                confetti.className = 'confetti';
+                confetti.style.left = `${Math.random() * 100}%`;
+                confetti.style.top = `${Math.random() * 100}%`;
+                confetti.style.backgroundColor = getRandomColor();
+                container.appendChild(confetti);
+
+                animateConfetti(confetti);
+            }
+        }
+
+        function animateConfetti(confetti) {
+            const animation = confetti.animate([
+                { transform: 'translate(0, 0) rotate(0deg)', opacity: 1 },
+                { transform: `translate(${Math.random() * 300 - 150}px, ${Math.random() * 200 + 200}px) rotate(${Math.random() * 360}deg)`, opacity: 0 }
+            ], {
+                duration: Math.random() * 3000 + 3000,
+                easing: 'cubic-bezier(0.25, 0.46, 0.45, 0.94)'
+            });
+
+            animation.onfinish = () => confetti.remove();
+        }
+
+        function getRandomColor() {
+            const colors = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff'];
+            return colors[Math.floor(Math.random() * colors.length)];
+        }
+
+        window.onload = function() {
+            createCandidates();
+            if (localStorage.getItem('drawn') === 'true') {
+                drawn = true;
+                firstDraw = false;
+                showWinners(false);
+            }
+        }
+
+        window.onclick = function(event) {
+            const modal = document.getElementById('winnerModal');
+            if (event.target == modal) {
+                closeModal();
+            }
+        }
+    </script>
+
+
+</body></html>
