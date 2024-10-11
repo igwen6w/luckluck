@@ -1,0 +1,638 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://code.jquery.com https://unpkg.com https://d3js.org https://threejs.org https://cdn.plot.ly https://stackpath.bootstrapcdn.com https://maps.googleapis.com https://cdn.tailwindcss.com https://ajax.googleapis.com https://kit.fontawesome.com https://cdn.datatables.net https://maxcdn.bootstrapcdn.com https://code.highcharts.com https://tako-static-assets-production.s3.amazonaws.com https://www.youtube.com https://fonts.googleapis.com https://fonts.gstatic.com https://pfst.cf2.poecdn.net https://i.imgur.com https://wikimedia.org https://*.icons8.com https://*.giphy.com https://picsum.photos https://images.unsplash.com; frame-src 'self' https://www.youtube.com https://trytako.com; child-src 'self'; manifest-src 'self'; worker-src 'self'; upgrade-insecure-requests; block-all-mixed-content;">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>活动抽奖应用</title>
+    <style>
+        :root {
+            --primary-color: #0070f3;
+            --secondary-color: #ff0080;
+            --background-color: #fafafa;
+            --text-color: #333;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Oxygen, Ubuntu, Cantarell, Fira Sans, Droid Sans, Helvetica Neue, sans-serif;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            width: 100%;
+            padding: 2rem;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .participants {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+            height: 60vh;
+            overflow-y: auto;
+        }
+
+        .participant {
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 1rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        .participant img {
+            width: 100%;
+            height: auto;
+            border-radius: 50%;
+            margin-bottom: 0.5rem;
+        }
+
+        .participant.winner, .participant.final-winner {
+            background-color: var(--primary-color);
+            color: #fff;
+            transform: scale(1.05);
+        }
+
+        .buttons {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        button {
+            background-color: var(--primary-color);
+            color: #fff;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        button:hover {
+            background-color: var(--secondary-color);
+        }
+
+        #configButton {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        #configButton:hover {
+            opacity: 1;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.4);
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: 5% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 90%;
+            max-width: 800px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .close:hover,
+        .close:focus {
+            color: #000;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        #configForm {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        #configForm input,
+        #configForm textarea {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        #confetti {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 9999;
+        }
+
+        .participant-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .participant-item {
+            background-color: #f0f0f0;
+            border-radius: 8px;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .participant-item img {
+            width: 100px;
+            height: 100px;
+            object-fit: cover;
+            border-radius: 50%;
+            margin-bottom: 0.5rem;
+        }
+
+        .participant-item input {
+            margin-bottom: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>活动抽奖</h1>
+        <div id="initialButtons" class="buttons">
+            <button id="importConfig">导入配置</button>
+            <button id="addConfig">添加配置</button>
+        </div>
+        <div id="participants" class="participants"></div>
+        <div id="drawButtons" class="buttons" style="display: none;">
+            <button id="startDraw">开始抽奖</button>
+        </div>
+        <button id="configButton">修改配置</button>
+    </div>
+
+    <div id="configModal" class="modal">
+        <div class="modal-content">
+            <span class="close">×</span>
+            <h2>配置抽奖</h2>
+            <form id="configForm">
+                <button type="button" id="resetConfig">重置配置</button>
+                <input type="text" id="drawTitle" placeholder="抽奖标题" required="">
+                <h3>参与者</h3>
+                <div id="participantList" class="participant-list"></div>
+                <input type="text" id="winners" placeholder="中奖人员编号 (用逗号分隔)" required="">
+                <input type="number" id="animationDuration" placeholder="抽奖动画执行时间 (秒)" required="">
+                <button type="button" id="addParticipant">添加参与者</button>
+                <button type="submit">保存配置</button>
+                <button type="button" id="exportConfig">导出配置</button>
+            </form>
+        </div>
+    </div>
+
+    <canvas id="confetti"></canvas>
+
+    <script>
+        // 全局变量
+        let currentConfig = null;
+        let drawStatus = 'notStarted'; // 'notStarted', 'inProgress', 'completed'
+        let db;
+
+        // DOM 元素
+        const initialButtons = document.getElementById('initialButtons');
+        const participantsContainer = document.getElementById('participants');
+        const drawButtons = document.getElementById('drawButtons');
+        const configButton = document.getElementById('configButton');
+        const importConfigButton = document.getElementById('importConfig');
+        const addConfigButton = document.getElementById('addConfig');
+        const startDrawButton = document.getElementById('startDraw');
+        const exportConfigButton = document.getElementById('exportConfig');
+        const resetConfigButton = document.getElementById('resetConfig');
+        const configModal = document.getElementById('configModal');
+        const closeModal = document.querySelector('.close');
+        const configForm = document.getElementById('configForm');
+        const participantList = document.getElementById('participantList');
+        const addParticipantButton = document.getElementById('addParticipant');
+
+        // 初始化 IndexedDB
+        const dbName = 'LotteryApp';
+        const dbVersion = 1;
+        const request = indexedDB.open(dbName, dbVersion);
+
+        request.onerror = (event) => {
+            console.error("IndexedDB error:", event.target.error);
+        };
+
+        request.onsuccess = (event) => {
+            db = event.target.result;
+            loadConfigFromIndexedDB();
+        };
+
+        request.onupgradeneeded = (event) => {
+            db = event.target.result;
+            const objectStore = db.createObjectStore("config", { keyPath: "id" });
+            objectStore.createIndex("title", "title", { unique: false });
+        };
+
+        // 事件监听器
+        importConfigButton.addEventListener('click', importConfig);
+        addConfigButton.addEventListener('click', showConfigModal);
+        startDrawButton.addEventListener('click', startDraw);
+        exportConfigButton.addEventListener('click', exportConfig);
+        resetConfigButton.addEventListener('click', resetConfig);
+        configButton.addEventListener('click', showConfigModal);
+        closeModal.addEventListener('click', hideConfigModal);
+        configForm.addEventListener('submit', saveConfig);
+        addParticipantButton.addEventListener('click', addParticipantField);
+
+        // 函数定义
+        function loadConfigFromIndexedDB() {
+            const transaction = db.transaction(["config"], "readonly");
+            const objectStore = transaction.objectStore("config");
+            const request = objectStore.get(1);
+
+            request.onerror = (event) => {
+                console.error("Error loading config from IndexedDB:", event.target.error);
+            };
+
+            request.onsuccess = (event) => {
+                if (request.result) {
+                    currentConfig = request.result;
+                    updateUIWithConfig();
+                }
+                loadDrawStatus();
+            };
+        }
+
+        function clearAllIndexedDB() {
+            return new Promise((resolve, reject) => {
+                // 获取所有数据库的列表
+                const databases = indexedDB.databases();
+                
+                databases.then((dbs) => {
+                // 创建一个Promise数组，每个Promise对应一个数据库的删除操作
+                const deletePromises = dbs.map(db => 
+                    new Promise((res, rej) => {
+                    const deleteRequest = indexedDB.deleteDatabase(db.name);
+                    deleteRequest.onsuccess = () => res();
+                    deleteRequest.onerror = () => rej(new Error(`无法删除数据库 ${db.name}`));
+                    })
+                );
+                
+                // 等待所有删除操作完成
+                Promise.all(deletePromises)
+                    .then(() => resolve("所有IndexedDB数据库已清空"))
+                    .catch(error => reject(error));
+                }).catch(error => reject(error));
+            });
+        }
+
+        function saveConfigToIndexedDB(config) {
+            const transaction = db.transaction(["config"], "readwrite");
+            const objectStore = transaction.objectStore("config");
+            const request = objectStore.put({ ...config, id: 1 });
+
+            request.onerror = (event) => {
+                console.error("Error saving config to IndexedDB:", event.target.error);
+            };
+
+            request.onsuccess = (event) => {
+                console.log("Config saved to IndexedDB");
+            };
+        }
+
+        function loadDrawStatus() {
+            const savedStatus = localStorage.getItem('drawStatus');
+            if (savedStatus) {
+                drawStatus = savedStatus;
+                updateUIWithStatus();
+            }
+        }
+
+        function importConfig() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json';
+            input.onchange = (event) => {
+                const file = event.target.files[0];
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        currentConfig = JSON.parse(e.target.result);
+                        saveConfigToIndexedDB(currentConfig);
+                        updateUIWithConfig();
+                    } catch (error) {
+                        alert('配置文件无效');
+                    }
+                };
+                reader.readAsText(file);
+            };
+            input.click();
+        }
+
+        function showConfigModal() {
+            configModal.style.display = 'block';
+            if (currentConfig) {
+                document.getElementById('drawTitle').value = currentConfig.title;
+                document.getElementById('winners').value = currentConfig.winners.join(',');
+                document.getElementById('animationDuration').value = currentConfig.animationDuration;
+                renderParticipantFields();
+            } else {
+                renderParticipantFields([{ id: '', name: '', photo: '' }]);
+            }
+        }
+
+        function hideConfigModal() {
+            configModal.style.display = 'none';
+        }
+
+        function renderParticipantFields(participants = currentConfig?.participants || []) {
+            participantList.innerHTML = '';
+            participants.forEach((participant, index) => {
+                const participantDiv = document.createElement('div');
+                participantDiv.className = 'participant-item';
+                participantDiv.innerHTML = `
+                    <img src="${participant.photo || 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='}" alt="参与者照片" id="participantPhoto${index}">
+                    <input type="text" placeholder="编号" value="${participant.id}" required>
+                    <input type="text" placeholder="姓名" value="${participant.name}" required>
+                    <input type="file" accept="image/*" onchange="handlePhotoUpload(event, ${index})">
+                `;
+                participantList.appendChild(participantDiv);
+            });
+        }
+
+        function handlePhotoUpload(event, index) {
+            const file = event.target.files[0];
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                document.getElementById(`participantPhoto${index}`).src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function addParticipantField() {
+            const participantDiv = document.createElement('div');
+            participantDiv.className = 'participant-item';
+            const index = participantList.children.length;
+            participantDiv.innerHTML = `
+                <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=" alt="参与者照片" id="participantPhoto${index}">
+                <input type="text" placeholder="编号" required>
+                <input type="text" placeholder="姓名" required>
+                <input type="file" accept="image/*" onchange="handlePhotoUpload(event, ${index})">
+            `;
+            participantList.appendChild(participantDiv);
+        }
+
+        function saveConfig(event) {
+            event.preventDefault();
+            const title = document.getElementById('drawTitle').value;
+            const winnersText = document.getElementById('winners').value;
+            const animationDuration = parseInt(document.getElementById('animationDuration').value);
+
+            const participants = Array.from(participantList.children).map(item => {
+                const inputs = item.querySelectorAll('input');
+                const img = item.querySelector('img');
+                return {
+                    id: inputs[0].value,
+                    name: inputs[1].value,
+                    photo: img.src
+                };
+            });
+
+            const winners = winnersText.split(',').map(id => id.trim());
+
+            currentConfig = { title, participants, winners, animationDuration };
+            saveConfigToIndexedDB(currentConfig);
+            updateUIWithConfig();
+            hideConfigModal();
+        }
+
+        function updateUIWithConfig() {
+            if (currentConfig) {
+                initialButtons.style.display = 'none';
+                drawButtons.style.display = 'flex';
+                configButton.style.display = 'block';
+                renderParticipants();
+            }
+        }
+
+        function renderParticipants() {
+            participantsContainer.innerHTML = '';
+            currentConfig.participants.forEach(participant => {
+                const div = document.createElement('div');
+                div.className = 'participant';
+                div.innerHTML = `
+                    <img src="${participant.photo}" alt="${participant.name}">
+                    <p>${participant.id}: ${participant.name}</p>
+                `;
+                participantsContainer.appendChild(div);
+            });
+        }
+
+        function startDraw() {
+            if (drawStatus === 'completed') {
+                alert('抽奖已经完成');
+                return;
+            }
+
+            drawStatus = 'inProgress';
+            localStorage.setItem('drawStatus', drawStatus);
+            startDrawButton.disabled = true;
+
+            const winners = currentConfig.winners;
+            const animationDuration = currentConfig.animationDuration * 1000;
+
+            animateDraw(winners[0], animationDuration / 2, () => {
+                setTimeout(() => {
+                    animateDraw(winners[1], animationDuration / 2, () => {
+                        drawStatus = 'completed';
+                        localStorage.setItem('drawStatus', drawStatus);
+                        showConfetti();
+                        updateUIWithStatus();
+                    });
+                }, 1000);
+            });
+        }
+
+        function animateDraw(winnerId, duration, callback) {
+            const participants = document.querySelectorAll('.participant:not(.final-winner)');
+            let intervalId = setInterval(() => {
+                participants.forEach(p => p.classList.remove('winner'));
+                const randomParticipant = participants[Math.floor(Math.random() * participants.length)];
+                randomParticipant.classList.add('winner');
+            }, 100);
+
+            setTimeout(() => {
+                clearInterval(intervalId);
+                const winnerElement = Array.from(participants).find(p => p.textContent.includes(winnerId));
+                if (winnerElement) {
+                    participants.forEach(p => p.classList.remove('winner'));
+                    winnerElement.classList.add('final-winner');
+                }
+                if (callback) callback();
+            }, duration);
+        }
+
+        function exportConfig() {
+            const dataStr = JSON.stringify(currentConfig);
+            const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+            const exportFileDefaultName = 'draw_config.json';
+
+            const linkElement = document.createElement('a');
+            linkElement.setAttribute('href', dataUri);
+            linkElement.setAttribute('download', exportFileDefaultName);
+            linkElement.click();
+        }
+
+        function resetConfig() {
+            localStorage.removeItem('drawStatus');
+            clearAllIndexedDB()
+            .then()
+            .catch(error => console.error("清空IndexedDB时发生错误:", error));
+            location.reload()
+
+        }
+
+        function updateUIWithStatus() {
+            if (drawStatus === 'completed') {
+                drawButtons.style.display = 'none';
+                startDrawButton.disabled = true;
+                currentConfig.winners.forEach(winnerId => {
+                    const winnerElement = Array.from(document.querySelectorAll('.participant')).find(p => p.textContent.includes(winnerId));
+                    if (winnerElement) {
+                        winnerElement.classList.add('winner');
+                    }
+                });
+            }
+        }
+
+        function showConfetti() {
+            const canvas = document.getElementById('confetti');
+            const ctx = canvas.getContext('2d');
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+
+            const confetti = [];
+            const confettiCount = 300;
+            const gravity = 0.5;
+            const terminalVelocity = 5;
+            const drag = 0.075;
+            const colors = [
+                { front: 'red', back: 'darkred' },
+                { front: 'green', back: 'darkgreen' },
+                { front: 'blue', back: 'darkblue' },
+                { front: 'yellow', back: 'darkyellow' },
+                { front: 'orange', back: 'darkorange' },
+                { front: 'pink', back: 'darkpink' },
+                { front: 'purple', back: 'darkpurple' },
+                { front: 'turquoise', back: 'darkturquoise' }
+            ];
+
+            const resizeCanvas = () => {
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+            };
+
+            window.addEventListener('resize', resizeCanvas);
+
+            const randomRange = (min, max) => Math.random() * (max - min) + min;
+
+            const initConfetti = () => {
+                for (let i = 0; i < confettiCount; i++) {
+                    confetti.push({
+                        color: colors[Math.floor(randomRange(0, colors.length))],
+                        dimensions: {
+                            x: randomRange(10, 20),
+                            y: randomRange(10, 30)
+                        },
+                        position: {
+                            x: randomRange(0, canvas.width),
+                            y: canvas.height - 1
+                        },
+                        rotation: randomRange(0, 2 * Math.PI),
+                        scale: {
+                            x: 1,
+                            y: 1
+                        },
+                        velocity: {
+                            x: randomRange(-25, 25),
+                            y: randomRange(0, -50)
+                        }
+                    });
+                }
+            };
+
+            const render = () => {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                confetti.forEach((confetto, index) => {
+                    let width = confetto.dimensions.x * confetto.scale.x;
+                    let height = confetto.dimensions.y * confetto.scale.y;
+
+                    ctx.translate(confetto.position.x, confetto.position.y);
+                    ctx.rotate(confetto.rotation);
+
+                    confetto.velocity.x -= confetto.velocity.x * drag;
+                    confetto.velocity.y = Math.min(confetto.velocity.y + gravity, terminalVelocity);
+                    confetto.velocity.x += Math.random() > 0.5 ? Math.random() : -Math.random();
+
+                    confetto.position.x += confetto.velocity.x;
+                    confetto.position.y += confetto.velocity.y;
+
+                    if (confetto.position.y >= canvas.height) confetti.splice(index, 1);
+
+                    if (confetto.position.x > canvas.width) confetto.position.x = 0;
+                    if (confetto.position.x < 0) confetto.position.x = canvas.width;
+
+                    confetto.scale.y = Math.cos(confetto.position.y * 0.1);
+                    ctx.fillStyle = confetto.scale.y > 0 ? confetto.color.front : confetto.color.back;
+
+                    ctx.fillRect(-width / 2, -height / 2, width, height);
+
+                    ctx.setTransform(1, 0, 0, 1, 0, 0);
+                });
+
+                if (confetti.length > 0) {
+                    requestAnimationFrame(render);
+                } else {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                }
+            };
+
+            initConfetti();
+            render();
+        }
+    </script>
+
+
+</body></html>
